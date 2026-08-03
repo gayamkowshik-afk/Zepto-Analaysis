@@ -1,10 +1,6 @@
 """
-Module 3 -- Support Assistant, FastAPI wrapper (/support_assistant)
-
-Exposes the LangGraph RAG pipeline as a POST /ask endpoint.
-
 Run (after `python ingest.py` has been run at least once):
-    uvicorn app:app --host 0.0.0.0 --port 7860
+
 """
 
 from fastapi import FastAPI
