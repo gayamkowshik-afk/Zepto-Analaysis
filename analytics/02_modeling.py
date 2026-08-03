@@ -1,17 +1,11 @@
 """
 Module 2 -- Analytics Pipeline, Part B (/analytics)
 02_modeling: reads the SAME committed titanic_clean.csv that 01_eda.py
-produced (no re-cleaning, no independent reload of the raw dataset), then
+produced, then
 runs the full predictive-modeling pipeline.
 
 Run (after 01_eda.py has been run at least once):
     python 02_modeling.py
-
-Outputs (written next to this script):
-    figures/*.png                 -- decision tree, ROC curves, residual plot
-    MODELING_REPORT.md             -- all metrics tables + written conclusions
-    best_pipeline.joblib           -- the complete fitted pipeline (preprocessing
-                                       + final estimator), reloadable end-to-end
 """
 
 import os
@@ -50,8 +44,6 @@ def log(md: str = ""):
 FEATURE_COLS = ["pclass", "sex", "age", "sibsp", "parch", "fare", "embarked"]
 NUMERIC_COLS = ["age", "sibsp", "parch", "fare"]
 CATEGORICAL_COLS = ["sex", "embarked"]
-# pclass is ordinal/numeric-coded already (1/2/3); treat as numeric, no scaling needed
-# but we include it untransformed via "passthrough" below.
 
 
 def build_preprocessor() -> ColumnTransformer:
@@ -75,10 +67,7 @@ def load_clean_data() -> pd.DataFrame:
           f"no independent reload of the raw dataset.")
     return df
 
-
-# ---------------------------------------------------------------------------
-# Task 7 -- stratified split
-# ---------------------------------------------------------------------------
+# Task 7-stratified split
 
 def stratified_split(df: pd.DataFrame):
     log("## Task 7 -- Stratified train/test split\n")
@@ -100,9 +89,7 @@ def stratified_split(df: pd.DataFrame):
     return X_train, X_test, y_train, y_test
 
 
-# ---------------------------------------------------------------------------
-# Task 9/10 -- train + evaluate 3 classifiers
-# ---------------------------------------------------------------------------
+# Task 9/10 
 
 def evaluate_classifier(name, pipe, X_test, y_test):
     y_pred = pipe.predict(X_test)
@@ -158,7 +145,6 @@ def train_and_evaluate_three(X_train, X_test, y_train, y_test, preprocessor):
     plt.close(fig)
     log(f"Decision tree visualization: ![tree](figures/decision_tree.png)\n")
 
-    # ROC curves, all three on one plot
     fig, ax = plt.subplots(figsize=(6, 5))
     for res in results:
         fpr, tpr, _ = roc_curve(y_test, res["y_proba"])
@@ -184,9 +170,7 @@ def train_and_evaluate_three(X_train, X_test, y_train, y_test, preprocessor):
     return fitted_pipes, results, comparison_df
 
 
-# ---------------------------------------------------------------------------
-# Task 11 -- imbalance handling comparison
-# ---------------------------------------------------------------------------
+# Task 11 - imbalance handling comparison
 
 def imbalance_comparison(X_train, X_test, y_train, y_test, preprocessor):
     log("## Task 11 -- Imbalance handling comparison (Random Forest)\n")
@@ -195,7 +179,7 @@ def imbalance_comparison(X_train, X_test, y_train, y_test, preprocessor):
 
     rows = []
 
-    # (a) baseline / no handling
+    # (a) no handling
     pipe_a = Pipeline([("preprocessor", preprocessor),
                         ("model", RandomForestClassifier(random_state=42))])
     pipe_a.fit(X_train, y_train)
@@ -247,9 +231,7 @@ def imbalance_comparison(X_train, X_test, y_train, y_test, preprocessor):
     return summary_df
 
 
-# ---------------------------------------------------------------------------
-# Task 12 -- hyperparameter tuning
-# ---------------------------------------------------------------------------
+# Task 12 - hyperparameter tuning
 
 def hyperparameter_tuning(X_train, X_test, y_train, y_test, preprocessor):
     log("## Task 12 -- Hyperparameter tuning (Random Forest)\n")
@@ -277,9 +259,7 @@ def hyperparameter_tuning(X_train, X_test, y_train, y_test, preprocessor):
     return best_pipe, grid.best_params_, oob
 
 
-# ---------------------------------------------------------------------------
 # Task 13 -- regression side-task
-# ---------------------------------------------------------------------------
 
 def regression_side_task(df: pd.DataFrame):
     log("## Task 13 -- Regression side-task: predicting `fare`\n")
@@ -330,9 +310,7 @@ def regression_side_task(df: pd.DataFrame):
     return {"MAE": mae, "RMSE": rmse, "R2": r2, "Adjusted R2": adj_r2}
 
 
-# ---------------------------------------------------------------------------
-# Task 14/15 -- final comparison table, recommendation, save best pipeline
-# ---------------------------------------------------------------------------
+# Task 14/15 -final comparison table, recommendation, save best pipeline
 
 def final_comparison_and_save(comparison_df, reg_metrics, best_clf_pipe, X_train, y_train):
     log("## Task 14 -- Final model comparison table\n")
@@ -365,13 +343,12 @@ def final_comparison_and_save(comparison_df, reg_metrics, best_clf_pipe, X_train
         f"but incomplete share of fare's variance, consistent with the "
         f"heteroscedasticity noted in Task 13.\n")
 
-    # Task 15: save complete pipeline (preprocessing + estimator together)
+    # Task 15: save complete pipeline
     save_path = os.path.join(HERE, "best_pipeline.joblib")
     joblib.dump(best_clf_pipe, save_path)
     log(f"Saved complete pipeline (preprocessor + tuned Random Forest) -> "
         f"`{os.path.basename(save_path)}`\n")
 
-    # reload and confirm it predicts correctly on raw input
     reloaded = joblib.load(save_path)
     sample_raw = X_train.iloc[:3]
     preds_original = best_clf_pipe.predict(sample_raw)
@@ -398,7 +375,6 @@ def main():
 
     reg_metrics = regression_side_task(df)
 
-    # update comparison_df's Random Forest row to reflect the TUNED model on test set
     tuned_eval = evaluate_classifier("Random Forest (tuned)", best_pipe, X_test, y_test)
     comparison_df = pd.concat([
         comparison_df,
