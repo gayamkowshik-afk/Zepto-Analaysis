@@ -1,17 +1,3 @@
-"""
-Module 3 -- Support Assistant, core RAG pipeline (/support_assistant)
-
-A LangGraph StateGraph with 3 nodes (classify_intent, retrieve_and_answer,
-direct_answer) and a conditional edge that routes between them, wrapping a
-ChromaDB + sentence-transformers retrieval step.
-
-LLM calls are gated behind the MOCK_LLM environment variable:
-  - MOCK_LLM unset, or "1" (DEFAULT, REQUIRED GRADED BASELINE): fully
-    deterministic, rule-based logic. No network call to any LLM provider.
-  - MOCK_LLM="0" (OPTIONAL, UNGRADED extension): calls a real LLM (Groq's
-    free tier by default) using the structured prompt template below. This
-    path is not required and must not affect the required MOCK_LLM=1 output.
-"""
 
 import os
 from typing import List, Optional, TypedDict
@@ -31,10 +17,6 @@ POLICY_KEYWORDS = [
     "gift card", "support hours",
 ]
 
-# ---------------------------------------------------------------------------
-# Structured prompt template (role-context-task-format-length skeleton)
-# Used only by the optional MOCK_LLM=0 real-LLM extension.
-# ---------------------------------------------------------------------------
 
 PROMPT_TEMPLATE = """ROLE: You are a helpful customer support assistant for Zepto, a quick-commerce grocery delivery app.
 
@@ -60,9 +42,6 @@ Customer question: {question}
 Answer:"""
 
 
-# ---------------------------------------------------------------------------
-# Pydantic output schema
-# ---------------------------------------------------------------------------
 
 class AnswerResponse(BaseModel):
     answer: str
@@ -70,9 +49,6 @@ class AnswerResponse(BaseModel):
     confidence: float = Field(ge=0.0, le=1.0)
 
 
-# ---------------------------------------------------------------------------
-# Graph state
-# ---------------------------------------------------------------------------
 
 class GraphState(TypedDict):
     query: str
@@ -80,10 +56,6 @@ class GraphState(TypedDict):
     retrieved_chunks: Optional[List[dict]]
     response: Optional[dict]        # dict matching AnswerResponse fields
 
-
-# ---------------------------------------------------------------------------
-# Retrieval backend (embedding model + Chroma collection), lazily loaded
-# ---------------------------------------------------------------------------
 
 _embedder = None
 _collection = None
@@ -132,20 +104,14 @@ def call_real_llm(prompt: str) -> str:
     resp.raise_for_status()
     return resp.json()["choices"][0]["message"]["content"].strip()
 
-
-# ---------------------------------------------------------------------------
 # Node 1: classify_intent
-# ---------------------------------------------------------------------------
-
 def classify_intent(state: GraphState) -> GraphState:
     query = state["query"]
 
     if is_mock_mode():
-        # keyword heuristic, graded baseline -- no LLM call
         lowered = query.lower()
         intent = "policy_question" if any(kw in lowered for kw in POLICY_KEYWORDS) else "general_question"
     else:
-        # optional extension: ask the real LLM to classify
         classify_prompt = (
             "Classify the following customer question as exactly one word, "
             "either 'policy_question' (about Zepto delivery, returns, refunds, "
@@ -157,16 +123,11 @@ def classify_intent(state: GraphState) -> GraphState:
 
     return {**state, "intent": intent}
 
-
-# ---------------------------------------------------------------------------
-# Node 2: retrieve_and_answer (policy_question branch)
-# ---------------------------------------------------------------------------
+# Node 2: retrieve_and_answer
 
 def retrieve_and_answer(state: GraphState) -> GraphState:
     query = state["query"]
 
-    # Retrieval always runs for real, in both mock and real-LLM modes --
-    # embedding + ChromaDB cosine similarity need no API key and no network call.
     embedder = get_embedder()
     collection = get_collection()
     query_embedding = embedder.encode([query]).tolist()
@@ -184,8 +145,8 @@ def retrieve_and_answer(state: GraphState) -> GraphState:
     else:
         prompt = PROMPT_TEMPLATE.format(context=top_chunk_snippet, question=query)
         answer_text = call_real_llm(prompt)
-        confidence = 0.9  # heuristic confidence for the real-LLM path
-
+        confidence = 0.9
+      
     response = {
         "answer": answer_text,
         "sources": [c["id"] for c in retrieved],
@@ -194,9 +155,7 @@ def retrieve_and_answer(state: GraphState) -> GraphState:
     return {**state, "retrieved_chunks": retrieved, "response": response}
 
 
-# ---------------------------------------------------------------------------
-# Node 3: direct_answer (general_question branch)
-# ---------------------------------------------------------------------------
+# Node 3: direct_answer
 
 def direct_answer(state: GraphState) -> GraphState:
     query = state["query"]
@@ -216,17 +175,8 @@ def direct_answer(state: GraphState) -> GraphState:
     return {**state, "response": response}
 
 
-# ---------------------------------------------------------------------------
-# Routing
-# ---------------------------------------------------------------------------
-
 def route_by_intent(state: GraphState) -> str:
     return "retrieve_and_answer" if state["intent"] == "policy_question" else "direct_answer"
-
-
-# ---------------------------------------------------------------------------
-# Build the graph
-# ---------------------------------------------------------------------------
 
 def build_graph():
     graph = StateGraph(GraphState)
@@ -256,7 +206,6 @@ def validate_response(raw: dict, retries_left: int = 2) -> AnswerResponse:
         return AnswerResponse(**raw)
     except ValidationError as e:
         if retries_left > 0 and not is_mock_mode():
-            # Optional extension: ask the LLM to correct its own malformed output
             correction_prompt = (
                 f"Your previous output failed schema validation with error: {e}. "
                 f"Please respond again, strictly as JSON with fields "
