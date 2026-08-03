@@ -1,7 +1,0 @@
-fastapi
-uvicorn[standard]
-pydantic
-langgraph
-chromadb
-sentence-transformers
-requests
