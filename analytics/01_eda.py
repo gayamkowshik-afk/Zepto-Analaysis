@@ -1,25 +1,3 @@
-"""
-Module 2 -- Analytics Pipeline, Part A (/analytics)
-01_eda: load Titanic once, profile it, clean it, tell the data story.
-
-Run:
-    python 01_eda.py
-
-Outputs (written next to this script):
-    titanic.csv          -- RAW fallback, saved immediately after the one load
-                             (guards grading against no internet access; if
-                             sns.load_dataset fails, this script itself falls
-                             back to pd.read_csv("titanic.csv"))
-    titanic_clean.csv     -- the cleaned data (cleaning happens exactly once,
-                             here; 02_modeling.py reads this file directly and
-                             performs no cleaning of its own)
-    figures/*.png         -- all charts
-    EDA_REPORT.md          -- profiling stats, missing-value decisions, IQR
-                             outlier counts, skew analysis, bivariate survival
-                             breakdowns, correlation heatmap + interpretation,
-                             4 multivariate charts + interpretations, and the
-                             standardization sanity check
-"""
 
 import os
 
@@ -43,9 +21,7 @@ def log(md: str = ""):
     print(md)
 
 
-# ---------------------------------------------------------------------------
-# Task 1 -- load once, profile, save raw fallback
-# ---------------------------------------------------------------------------
+# Task 1
 
 def load_titanic() -> pd.DataFrame:
     raw_csv = os.path.join(HERE, "titanic.csv")
@@ -55,9 +31,6 @@ def load_titanic() -> pd.DataFrame:
     except Exception as e:
         print(f"sns.load_dataset failed ({e}); falling back to committed titanic.csv")
         df = pd.read_csv(raw_csv)
-    # Save the raw, as-loaded DataFrame as the committed offline fallback,
-    # immediately after loading -- this is the ONE and ONLY load of the raw
-    # dataset in the whole module.
     df.to_csv(raw_csv, index=False)
     return df
 
@@ -78,9 +51,7 @@ def profile(df: pd.DataFrame):
     return missing_pct
 
 
-# ---------------------------------------------------------------------------
-# Task 2 -- missing value handling, threshold rule
-# ---------------------------------------------------------------------------
+# Task 2
 
 def clean_missing(df: pd.DataFrame, missing_pct: pd.Series) -> pd.DataFrame:
     df = df.copy()
@@ -105,21 +76,13 @@ def clean_missing(df: pd.DataFrame, missing_pct: pd.Series) -> pd.DataFrame:
                 log(f"- `{col}`: {pct}% missing (5-30%) -> **imputed with mode** "
                     f"('{fill}').")
         else:
-            # deck is ~77% missing. Imputation would be unreliable at that
-            # rate -- decision: drop the column. It's also not planned for
-            # use in the modeling pipeline, so dropping loses no signal we
-            # intended to use, and avoids injecting a mostly-fabricated
-            # feature into 60+ rows out of every 100.
             df = df.drop(columns=[col])
             log(f"- `{col}`: {pct}% missing (>=30%) -> **dropped the column** "
                 f"(too sparse to impute reliably; not used downstream).")
     log("")
     return df
 
-
-# ---------------------------------------------------------------------------
-# Task 3 -- univariate analysis
-# ---------------------------------------------------------------------------
+# Task 3 - univariate analysis
 
 def iqr_outliers(series: pd.Series) -> int:
     q1, q3 = series.quantile(0.25), series.quantile(0.75)
@@ -152,10 +115,7 @@ def univariate(df: pd.DataFrame):
         f"tail of a few very expensive fares pulls the mean above the median, "
         f"while most passengers cluster at cheap fares near the mode.\n")
 
-
-# ---------------------------------------------------------------------------
-# Task 4 -- bivariate analysis
-# ---------------------------------------------------------------------------
+# Task 4 - bivariate analysis
 
 def bivariate(df: pd.DataFrame):
     log("## Task 4 -- Bivariate analysis\n")
@@ -166,7 +126,6 @@ def bivariate(df: pd.DataFrame):
     rate_by_pclass = df.groupby("pclass")["survived"].mean().round(3)
     log("**Survival rate by pclass:**\n```\n" + rate_by_pclass.to_string() + "\n```\n")
 
-    # boolean masking combos, sex + pclass together
     combo_rows = []
     for sex_val in df["sex"].unique():
         for pclass_val in sorted(df["pclass"].unique()):
@@ -186,8 +145,7 @@ def bivariate(df: pd.DataFrame):
     path = os.path.join(FIG_DIR, "correlation_heatmap.png")
     plt.savefig(path, dpi=110)
     plt.close(fig)
-
-    # two strongest off-diagonal absolute correlations
+    
     corr_abs = corr.abs().to_numpy().copy()
     np.fill_diagonal(corr_abs, 0)
     corr_abs = pd.DataFrame(corr_abs, index=corr.index, columns=corr.columns)
@@ -209,15 +167,12 @@ def bivariate(df: pd.DataFrame):
     log("")
     return corr, top2
 
-
-# ---------------------------------------------------------------------------
 # Task 5 -- multivariate data story (>=4 charts)
-# ---------------------------------------------------------------------------
 
 def multivariate(df: pd.DataFrame):
     log("## Task 5 -- Multivariate data story\n")
 
-    # Chart 1: grouped bar -- survival rate by class and sex
+    # Chart 1: grouped bar
     fig, ax = plt.subplots(figsize=(6, 4))
     grouped = df.groupby(["pclass", "sex"])["survived"].mean().unstack()
     grouped.plot(kind="bar", ax=ax)
@@ -235,7 +190,7 @@ def multivariate(df: pd.DataFrame):
         "matches the historical 'women and children first' boarding norm, "
         "moderated by which deck/class had faster access to lifeboats.\n")
 
-    # Chart 2: box -- age by survival, split by class
+    # Chart 2: box
     fig, ax = plt.subplots(figsize=(6, 4))
     sns.boxplot(data=df, x="pclass", y="age", hue="survived", ax=ax)
     ax.set_title("Age distribution by class and survival")
@@ -250,7 +205,7 @@ def multivariate(df: pd.DataFrame):
         "slightly younger than non-survivors -- age matters, but far less "
         "than class or sex do on their own.\n")
 
-    # Chart 3: scatter -- fare vs age colored by survived
+    # Chart 3: scatter
     fig, ax = plt.subplots(figsize=(6, 4))
     sns.scatterplot(data=df, x="age", y="fare", hue="survived", alpha=0.6, ax=ax)
     ax.set_title("Fare vs Age, colored by survival")
@@ -265,7 +220,7 @@ def multivariate(df: pd.DataFrame):
         "separates survival outcomes far more cleanly than age does on a "
         "scatter plot.\n")
 
-    # Chart 4: heatmap -- survival rate by pclass x embark_town
+    # Chart 4: heatmap 
     fig, ax = plt.subplots(figsize=(6, 4))
     pivot = df.pivot_table(index="pclass", columns="embark_town", values="survived", aggfunc="mean")
     sns.heatmap(pivot, annot=True, fmt=".2f", cmap="YlGnBu", ax=ax)
@@ -281,10 +236,7 @@ def multivariate(df: pd.DataFrame):
         "generally. Southampton 3rd class, the largest and poorest group "
         "aboard, has the lowest survival rate of any cell in this grid.\n")
 
-
-# ---------------------------------------------------------------------------
 # Task 6 -- exploratory standardization check
-# ---------------------------------------------------------------------------
 
 def standardization_check(df: pd.DataFrame):
     log("## Task 6 -- Exploratory standardization check (EDA-stage only)\n")
