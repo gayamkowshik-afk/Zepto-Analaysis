@@ -1,12 +1,4 @@
 """
-Module 3 -- Support Assistant, ingestion step (/support_assistant)
-
-Loads all 8 corpus documents, chunks them (one chunk per document -- they're
-short enough that per-document chunking preserves full context), embeds each
-chunk locally with sentence-transformers' all-MiniLM-L6-v2 (no API key, no
-account, runs entirely on-machine), and stores the embeddings in a
-persistent ChromaDB collection on disk.
-
 Run once before starting the FastAPI app:
     python ingest.py
 """
@@ -49,7 +41,6 @@ def build_collection():
     embeddings = model.encode(texts).tolist()
 
     client = chromadb.PersistentClient(path=CHROMA_DIR)
-    # Fresh collection each ingest run
     try:
         client.delete_collection(COLLECTION_NAME)
     except Exception:
