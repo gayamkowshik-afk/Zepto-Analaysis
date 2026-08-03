@@ -1,20 +1,3 @@
-"""
-Module 1 -- Data Pipeline (/data_pipeline)
-
-Scrapes book catalog data from books.toscrape.com (a public scraping-practice
-site, no login/API key/paid tier required), cleans it, converts price from
-GBP to INR using a fixed project baseline rate, loads it into a normalized
-two-table SQLite schema, and runs SQL + pandas queries against it.
-
-Run:
-    python scrape_clean_load.py
-
-Outputs (written next to this script):
-    books_raw.csv       -- raw scraped rows before cleaning
-    books_clean.csv      -- cleaned rows with price_gbp / price_inr / rating / in_stock
-    books.db             -- SQLite database (categories, books tables)
-    queries_output.txt   -- the 5+ SQL queries and their printed output
-"""
 
 import os
 import re
@@ -29,7 +12,7 @@ BASE_URL = "https://books.toscrape.com/"
 CATALOGUE_URL = BASE_URL + "catalogue/"
 HERE = os.path.dirname(os.path.abspath(__file__))
 
-GBP_TO_INR = 105.50  # fixed, project-defined baseline conversion rate (required, keyless)
+GBP_TO_INR = 105.50  
 
 RATING_WORD_TO_INT = {
     "One": 1, "Two": 2, "Three": 3, "Four": 4, "Five": 5,
@@ -46,7 +29,7 @@ def get_soup(url: str) -> BeautifulSoup:
 
 
 def discover_categories() -> list[dict]:
-    """Return list of {name, url} for every book category on the site."""
+    """Returns list of {name, url} for every book category on the site."""
     soup = get_soup(BASE_URL)
     cats = []
     for a in soup.select("div.side_categories ul li ul li a"):
@@ -57,7 +40,7 @@ def discover_categories() -> list[dict]:
 
 
 def scrape_category(name: str, url: str) -> list[dict]:
-    """Scrape every book across every paginated listing page of one category."""
+    """Scrapes every book across every paginated listing page of one category."""
     rows = []
     page_url = url
     while page_url:
@@ -67,7 +50,7 @@ def scrape_category(name: str, url: str) -> list[dict]:
             price_text = art.select_one("p.price_color").get_text(strip=True)
             availability_text = art.select_one("p.instock.availability").get_text(strip=True)
             star_classes = art.select_one("p.star-rating")["class"]
-            # star_classes looks like ["star-rating", "Three"]
+            
             star_rating_word = [c for c in star_classes if c != "star-rating"][0]
             rows.append({
                 "title": title,
@@ -81,7 +64,7 @@ def scrape_category(name: str, url: str) -> list[dict]:
             page_url = page_url.rsplit("/", 1)[0] + "/" + next_link["href"]
         else:
             page_url = None
-        time.sleep(0.2)  # be polite to the practice server
+        time.sleep(0.2)
     return rows
 
 
@@ -95,16 +78,13 @@ def scrape_all(min_categories: int = 3, min_books: int = 60) -> pd.DataFrame:
             continue
         all_rows.extend(cat_rows)
         used += 1
-        # keep going until we have both >=3 categories AND >=60 books,
-        # then stop once both minimums are comfortably satisfied
+        
         if used >= min_categories and len(all_rows) >= min_books:
             break
     return pd.DataFrame(all_rows)
 
 
-# ---------------------------------------------------------------------------
 # Cleaning
-# ---------------------------------------------------------------------------
 
 def clean_price(price_text: str) -> float | None:
     """'£51.77' -> 51.77. Returns None if it can't be parsed."""
@@ -132,10 +112,6 @@ def clean_dataframe(df: pd.DataFrame) -> pd.DataFrame:
     df["rating"] = df["star_rating"].apply(clean_rating)
     df["in_stock"] = df["availability"].apply(clean_availability)
 
-    # Rows where a field failed to parse: price_gbp and rating are numeric ->
-    # median-impute; in_stock is boolean/categorical with no sensible median,
-    # so a row with an unparseable availability string is dropped instead
-    # (documented choice, not a silent crash).
     n_before = len(df)
 
     if df["price_gbp"].isna().any():
@@ -159,9 +135,7 @@ def clean_dataframe(df: pd.DataFrame) -> pd.DataFrame:
     return df[["title", "price_gbp", "price_inr", "rating", "in_stock", "category"]]
 
 
-# ---------------------------------------------------------------------------
 # Database load
-# ---------------------------------------------------------------------------
 
 def load_to_sqlite(df: pd.DataFrame, db_path: str) -> None:
     if os.path.exists(db_path):
@@ -204,9 +178,7 @@ def load_to_sqlite(df: pd.DataFrame, db_path: str) -> None:
     conn.close()
 
 
-# ---------------------------------------------------------------------------
 # SQL queries
-# ---------------------------------------------------------------------------
 
 QUERIES = [
     (
